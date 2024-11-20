@@ -132,7 +132,8 @@ const styles = StyleSheet.create({
   },
   dateButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 16,    
+    textAlign: 'center',
   },
   addButton: {
     backgroundColor: colors.secondary,
