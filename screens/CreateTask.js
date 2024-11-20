@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { db } from '../firebaseConfig';  // Importa la configuración de Firebase
+import { addDoc, collection, getDocs } from 'firebase/firestore';
 import colors from '../colors';
 
 export default function CreateTask({ navigation, route }) {
@@ -9,21 +11,35 @@ export default function CreateTask({ navigation, route }) {
   const [deadline, setDeadline] = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (!title.trim()) {
       alert('The task title cannot be empty.');
       return;
     }
-    setTasks((prevTasks) => [
-      ...prevTasks,
-      {
-        id: Math.random().toString(),
+
+    try {
+      // Agregar la nueva tarea a Firebase
+      await addDoc(collection(db, 'taskList'), {
         title,
         deadline: deadline || null,
         completed: false,
-      },
-    ]);
-    navigation.goBack();
+      });
+
+      // Obtener las tareas actualizadas desde Firebase
+      const querySnapshot = await getDocs(collection(db, 'taskList'));
+      const fetchedTasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Actualizar las tareas en TaskList
+      setTasks(fetchedTasks); // Actualizar el estado de las tareas en la pantalla TaskList
+
+      // Regresar a TaskList después de agregar la tarea
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error adding task: ", error);
+    }
   };
 
   const showDatePicker = () => {
@@ -77,8 +93,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: colors.main,
-    alignItems: 'center',
+    backgroundColor: colors.main
   },
   header: {
     backgroundColor: colors.secondary,
@@ -96,47 +111,37 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   inputContainer: {
-    width: '100%',
     marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    marginBottom: 5,
-    color: 'black',
+    fontWeight: 'bold',
   },
   input: {
-    backgroundColor: 'white',
-    borderRadius: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.secondary,
     padding: 10,
     fontSize: 16,
-    marginBottom: 15,
-    borderColor: colors.secondary,
-    borderWidth: 1,
+    marginBottom: 20,
   },
   dateButton: {
-    backgroundColor: 'white',
-    borderRadius: 5,
+    backgroundColor: colors.secondary,
     padding: 10,
-    marginBottom: 15,
-    borderColor: colors.secondary,
-    borderWidth: 1,
-    alignItems: 'center',
+    borderRadius: 5,
+    marginBottom: 20,
   },
   dateButtonText: {
+    color: 'white',
     fontSize: 16,
-    color: 'black',
   },
   addButton: {
     backgroundColor: colors.secondary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    padding: 15,
     alignItems: 'center',
     borderRadius: 5,
-    marginTop: 10,
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
   },
 });

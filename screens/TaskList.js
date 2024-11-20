@@ -1,42 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Checkbox from 'expo-checkbox';
+import { collection, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';  // Asegúrate de importar la configuración de Firebase
 import colors from '../colors';
 
 export default function TaskList({ navigation }) {
-  const [tasks, setTasks] = useState([
-    { id: '1', title: 'Comprar menjar', deadline: '2024-11-20', completed: false },
-  { id: '2', title: 'Netejar la casa', deadline: null, completed: false },
-  { id: '3', title: 'Passejar el gos', deadline: '2024-11-21', completed: true },
-  { id: '4', title: 'Fer exercici', deadline: '2024-11-22', completed: false },
-  { id: '5', title: 'Preparar el sopar', deadline: '2024-11-20', completed: true },
-  { id: '6', title: 'Revisar documents', deadline: '2024-11-24', completed: false },
-  { id: '7', title: 'Comprar un regal', deadline: null, completed: false },
-  { id: '8', title: 'Anar al metge', deadline: '2024-11-23', completed: true },
-  { id: '9', title: 'Llevar-me d’hora', deadline: '2024-11-21', completed: false },
-  { id: '10', title: 'Comprar llibres', deadline: null, completed: false },
-  { id: '11', title: 'Visitar un amic', deadline: null, completed: false },
-  { id: '12', title: 'Netejar el cotxe', deadline: '2024-11-26', completed: false },
-  { id: '13', title: 'Practicar un instrument', deadline: null, completed: false },
-  { id: '14', title: 'Pagar factures', deadline: '2024-11-30', completed: false },
-  { id: '15', title: 'Organitzar escriptori', deadline: null, completed: false },
-  { id: '16', title: 'Fer la compra online', deadline: '2024-11-25', completed: false } 
-  ]);
+  const [tasks, setTasks] = useState([]);
 
-  const toggleCompletion = (id) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+  // Esta función obtiene las tareas de Firebase
+  const fetchTasks = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'taskList'));  // La colección 'tasks' en Firestore
+      const fetchedTasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error("Error fetching tasks: ", error);
+    }
   };
 
-  const deleteTask = (id) => {
+  // Cargar tareas al inicio
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  // Actualizar el estado de 'completed' en Firestore
+  const toggleCompletion = async (id, completed) => {
+    try {
+      const taskRef = doc(db, 'taskList', id);
+      await updateDoc(taskRef, { completed: !completed });
+      fetchTasks();  // Recargar tareas después de la actualización
+    } catch (error) {
+      console.error("Error updating task: ", error);
+    }
+  };
+
+  // Eliminar tarea de Firestore
+  const deleteTask = async (id) => {
     Alert.alert('Confirm Delete', 'Are you sure you want to delete this task?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'OK',
-        onPress: () => setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id)),
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'taskList', id));  // Elimina la tarea de Firebase
+            fetchTasks();  // Recargar tareas después de la eliminación
+          } catch (error) {
+            console.error("Error deleting task: ", error);
+          }
+        },
       },
     ]);
   };
@@ -45,16 +60,13 @@ export default function TaskList({ navigation }) {
     <View style={styles.taskContainer}>
       <Checkbox
         value={item.completed}
-        onValueChange={() => toggleCompletion(item.id)}
+        onValueChange={() => toggleCompletion(item.id, item.completed)}
         style={styles.checkbox}
       />
       <Text
-        style={[
-          styles.taskText,
-          item.completed ? styles.completedText : null,
-        ]}
+        style={[styles.taskText, item.completed ? styles.completedText : null]}
       >
-        {item.deadline ? `${item.title} - ${item.deadline}` : item.title}
+        {item.deadline ? `${item.title} - ${formatDate(item.deadline)}` : item.title}
       </Text>
       <TouchableOpacity
         style={styles.deleteButton}
@@ -65,26 +77,34 @@ export default function TaskList({ navigation }) {
     </View>
   );
 
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');  // Agregar 0 si el día es menor a 10
+    const month = String(d.getMonth() + 1).padStart(2, '0');  // Los meses empiezan desde 0, por eso sumamos 1
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;  // Retornar la fecha en formato DD-MM-YYYY
+  };
+
   return (
     <View style={styles.container}>
-        <View style={styles.header}>
-            <Text style={styles.headerText}>TO DO LIST</Text>
-        </View>
-        <View style={{flex: 5, paddingTop: 30}}>
-            <FlatList
-                data={tasks}
-                renderItem={renderTask}
-                keyExtractor={(item) => item.id}
-            />
-        </View>
-        <View style={{flex: 1}}>
-            <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => navigation.navigate('CreateTask', { setTasks })}
-            >
-                <Text style={styles.addButtonText}>Add Task</Text>
-            </TouchableOpacity>
-        </View>        
+      <View style={styles.header}>
+        <Text style={styles.headerText}>TO DO LIST</Text>
+      </View>
+      <View style={{flex: 5, paddingTop: 30}}>
+        <FlatList
+          data={tasks}
+          renderItem={renderTask}
+          keyExtractor={(item) => item.id}
+        />
+      </View>
+      <View style={{flex: 1}}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('CreateTask', { setTasks })}
+        >
+          <Text style={styles.addButtonText}>Add Task</Text>
+        </TouchableOpacity>
+      </View>        
     </View>
   );
 }
@@ -124,9 +144,9 @@ const styles = StyleSheet.create({
     fontSize: 16 
   },
   completedText: {
-     textDecorationLine: 'line-through', 
-     color: 'gray' 
-    },
+    textDecorationLine: 'line-through', 
+    color: 'gray' 
+  },
   deleteButton: { 
     marginLeft: 'auto',
     marginRight: 7, 
@@ -151,5 +171,4 @@ const styles = StyleSheet.create({
     color: 'white', 
     fontSize: 16 
   },
-  
 });
